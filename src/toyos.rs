@@ -1,7 +1,6 @@
 //! # sys (ToyOS)
 //!
 //! ToyOS-specific structs and functions. Will be imported as `sys` on ToyOS.
-#![expect(unsafe_code)]
 
 use std::io::{self, BufRead};
 
@@ -10,36 +9,13 @@ use crate::Error;
 pub fn conf_dirs() -> Vec<String> { Vec::new() }
 pub fn data_dirs() -> Vec<String> { Vec::new() }
 
-const SYS_SCREEN_SIZE: u64 = 7;
-const SYS_SET_STDIN_MODE: u64 = 22;
-
-fn syscall(num: u64, a1: u64) -> u64 {
-    let ret: u64;
-    unsafe {
-        core::arch::asm!(
-            "syscall",
-            in("rdi") num,
-            in("rsi") a1,
-            in("rdx") 0u64,
-            in("r8") 0u64,
-            in("r9") 0u64,
-            lateout("rax") ret,
-            out("rcx") _,
-            out("r11") _,
-        );
-    }
-    ret
-}
-
 /// Terminal mode: stores nothing, but used as a token for restore.
 #[derive(Clone, Copy)]
 pub struct TermMode;
 
-/// Return the current window size as (rows, columns) via the screen_size syscall.
+/// Return the current window size as (rows, columns).
 pub fn get_window_size() -> Result<(usize, usize), Error> {
-    let raw = syscall(SYS_SCREEN_SIZE, 0);
-    let rows = (raw >> 32) as usize;
-    let cols = (raw & 0xFFFF_FFFF) as usize;
+    let (rows, cols) = std::os::toyos::io::screen_size();
     if rows == 0 || cols == 0 {
         Err(Error::InvalidWindowSize)
     } else {
@@ -55,13 +31,13 @@ pub fn has_window_size_changed() -> bool { false }
 
 /// Restore canonical (line-buffered) stdin mode.
 pub fn set_term_mode(_term: &TermMode) -> io::Result<()> {
-    syscall(SYS_SET_STDIN_MODE, 0);
+    std::os::toyos::io::set_stdin_raw(false);
     Ok(())
 }
 
 /// Switch stdin to raw mode (byte-at-a-time, no echo, no line editing).
 pub fn enable_raw_mode() -> io::Result<TermMode> {
-    syscall(SYS_SET_STDIN_MODE, 1);
+    std::os::toyos::io::set_stdin_raw(true);
     Ok(TermMode)
 }
 
