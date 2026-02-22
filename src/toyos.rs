@@ -6,17 +6,20 @@
 use std::io::{self, BufRead};
 
 use crate::Error;
-pub use crate::xdg::*;
+// ToyOS has no XDG directories; return empty to avoid probing nonexistent paths.
+pub fn conf_dirs() -> Vec<String> { Vec::new() }
+pub fn data_dirs() -> Vec<String> { Vec::new() }
 
 const SYS_SCREEN_SIZE: u64 = 7;
+const SYS_SET_STDIN_MODE: u64 = 22;
 
-fn syscall(num: u64) -> u64 {
+fn syscall(num: u64, a1: u64) -> u64 {
     let ret: u64;
     unsafe {
         core::arch::asm!(
             "syscall",
             in("rdi") num,
-            in("rsi") 0u64,
+            in("rsi") a1,
             in("rdx") 0u64,
             in("r8") 0u64,
             in("r9") 0u64,
@@ -28,13 +31,13 @@ fn syscall(num: u64) -> u64 {
     ret
 }
 
-/// Terminal mode placeholder. ToyOS does not have termios.
+/// Terminal mode: stores nothing, but used as a token for restore.
 #[derive(Clone, Copy)]
 pub struct TermMode;
 
 /// Return the current window size as (rows, columns) via the screen_size syscall.
 pub fn get_window_size() -> Result<(usize, usize), Error> {
-    let raw = syscall(SYS_SCREEN_SIZE);
+    let raw = syscall(SYS_SCREEN_SIZE, 0);
     let rows = (raw >> 32) as usize;
     let cols = (raw & 0xFFFF_FFFF) as usize;
     if rows == 0 || cols == 0 {
@@ -50,11 +53,17 @@ pub fn register_winsize_change_signal_handler() -> io::Result<()> { Ok(()) }
 /// Always returns false: ToyOS does not support window resize signals.
 pub fn has_window_size_changed() -> bool { false }
 
-/// No-op: ToyOS does not have terminal modes.
-pub fn set_term_mode(_term: &TermMode) -> io::Result<()> { Ok(()) }
+/// Restore canonical (line-buffered) stdin mode.
+pub fn set_term_mode(_term: &TermMode) -> io::Result<()> {
+    syscall(SYS_SET_STDIN_MODE, 0);
+    Ok(())
+}
 
-/// No-op: ToyOS kernel already provides raw-style input.
-pub fn enable_raw_mode() -> io::Result<TermMode> { Ok(TermMode) }
+/// Switch stdin to raw mode (byte-at-a-time, no echo, no line editing).
+pub fn enable_raw_mode() -> io::Result<TermMode> {
+    syscall(SYS_SET_STDIN_MODE, 1);
+    Ok(TermMode)
+}
 
 /// Construct and lock a new handle to the standard input.
 pub fn stdin() -> io::Result<impl BufRead> { Ok(io::stdin().lock()) }
