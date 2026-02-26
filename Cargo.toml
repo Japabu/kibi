@@ -25,6 +25,7 @@ edition.workspace = true
 repository.workspace = true
 
 [dependencies]
+toyos-abi = { path = "../../rust/library/toyos-abi" }
 unicode-width = "0.2.2"
 
 [target.'cfg(unix)'.dependencies]

@@ -15,7 +15,7 @@ pub struct TermMode;
 
 /// Return the current window size as (rows, columns).
 pub fn get_window_size() -> Result<(usize, usize), Error> {
-    let (rows, cols) = std::os::toyos::io::screen_size();
+    let (rows, cols) = toyos_abi::syscall::screen_size();
     if rows == 0 || cols == 0 {
         Err(Error::InvalidWindowSize)
     } else {
